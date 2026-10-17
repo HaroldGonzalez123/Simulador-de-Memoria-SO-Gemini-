@@ -1,0 +1,806 @@
+Harold Gonzalez 0903-24-21104, Simulador-de-Memoria-SO-Gemini-
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador de Administración de Memoria - Fragmentación</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* Stripes Pattern for Internal Fragmentation */
+    .bg-stripes-warning {
+      background-image: linear-gradient(45deg, rgba(239, 68, 68, 0.15) 25%, transparent 25%, transparent 50%, rgba(239, 68, 68, 0.15) 50%, rgba(239, 68, 68, 0.15) 75%, transparent 75%, transparent);
+      background-size: 1rem 1rem;
+    }
+    /* Smooth transition for memory block animation */
+    .ram-block {
+      transition: all 0.3s ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- HEADER -->
+  <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center space-x-3">
+        <div class="p-2 bg-indigo-600 rounded-lg">
+          <i class="fa-solid font-bold fa-microchip text-2xl text-indigo-200"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold leading-tight">Simulador de Memoria SO</h1>
+          <p class="text-xs text-indigo-200">Explicación didáctica de Fragmentación Interna y Externa</p>
+        </div>
+      </div>
+      
+      <!-- MODE SWITCH TABS -->
+      <div class="flex bg-indigo-800/60 p-1 rounded-xl border border-indigo-500/30">
+        <button id="tab-internal" onclick="switchMode('internal')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 bg-white text-indigo-700 shadow-sm">
+          <i class="fa-solid fa-table-cells"></i>
+          <span>Frag. Interna (Paginación)</span>
+        </button>
+        <button id="tab-external" onclick="switchMode('external')" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 text-indigo-200 hover:text-white">
+          <i class="fa-solid fa-puzzle-piece"></i>
+          <span>Frag. Externa (Segmentación)</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- SIDEBAR: CONTROLS (4 Cols) -->
+    <aside class="lg:col-span-4 space-y-6">
+      
+      <!-- CONTROL PANEL CARD -->
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <h2 class="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-sliders text-indigo-600"></i>
+          <span id="panel-title">Panel de Control</span>
+        </h2>
+
+        <!-- FORM: INTERNAL FRAGMENTATION CONTROLS -->
+        <div id="controls-internal" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tamaño de Marco/Página (KB)</label>
+            <div class="flex gap-2">
+              <select id="frame-size-select" onchange="resetInternalMode()" class="w-full bg-slate-50 border border-slate-300 text-slate-700 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <option value="64">64 KB</option>
+                <option value="128" selected>128 KB</option>
+                <option value="256">256 KB</option>
+              </select>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">La memoria se dividirá en bloques fijos de este tamaño.</p>
+          </div>
+
+          <hr class="border-slate-100">
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Crear Nuevo Proceso</label>
+            <div class="flex gap-2">
+              <input type="number" id="proc-size-internal" placeholder="Ej: 90" min="1" max="1024" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <span class="inline-flex items-center px-3 text-xs text-slate-500 bg-slate-100 border border-r-0 border-slate-300 rounded-r-none rounded-l-lg -ml-2 hidden">KB</span>
+              <button onclick="addProcessInternal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition shadow-sm hover:shadow flex items-center gap-1 shrink-0">
+                <i class="fa-solid fa-plus"></i> Asignar
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Si el proceso no ocupa todo el marco, habrá desperdicio interno.</p>
+          </div>
+        </div>
+
+        <!-- FORM: EXTERNAL FRAGMENTATION CONTROLS -->
+        <div id="controls-external" class="space-y-4 hidden">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Crear Proceso Dinámico</label>
+            <div class="flex gap-2">
+              <input type="number" id="proc-size-external" placeholder="Ej: 150" min="10" max="1024" class="w-full bg-slate-50 border border-slate-300 text-slate-800 text-sm rounded-lg p-2.5 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+              <button onclick="addProcessExternal()" class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2.5 rounded-lg transition shadow-sm hover:shadow flex items-center gap-1 shrink-0">
+                <i class="fa-solid fa-plus"></i> Asignar
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1">Se asignará de forma contigua en el primer hueco disponible (First-Fit).</p>
+          </div>
+
+          <hr class="border-slate-100">
+
+          <div class="pt-1">
+            <button onclick="compactMemory()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm py-2.5 px-4 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-compress"></i> Compactar Memoria
+            </button>
+            <p class="text-[11px] text-slate-400 mt-1 text-center">Desplaza todos los procesos para consolidar el espacio libre en un solo bloque.</p>
+          </div>
+        </div>
+
+        <!-- RESTART BUTTON -->
+        <div class="mt-6 pt-4 border-t border-slate-100">
+          <button onclick="resetSimulator()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs py-2 px-3 rounded-lg transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Reiniciar Estado Actual
+          </button>
+        </div>
+      </div>
+
+      <!-- METRICS & METERS CARD -->
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Métricas del Sistema</h3>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-[11px] text-slate-500 font-medium block">Memoria Total</span>
+            <span id="metric-total" class="text-lg font-bold text-slate-800">1024 KB</span>
+          </div>
+          <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <span class="text-[11px] text-slate-500 font-medium block">Memoria Usada Real</span>
+            <span id="metric-used" class="text-lg font-bold text-indigo-600">0 KB</span>
+          </div>
+        </div>
+
+        <!-- SPECIFIC FRAGMENTATION METRIC -->
+        <div id="metric-frag-container" class="p-3 bg-amber-50 border border-amber-200 rounded-xl">
+          <div class="flex justify-between items-center">
+            <span id="metric-frag-title" class="text-xs font-semibold text-amber-800">Frag. Interna Total</span>
+            <span id="metric-frag-percent" class="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">0%</span>
+          </div>
+          <span id="metric-frag-value" class="text-xl font-extrabold text-amber-900 block mt-1">0 KB</span>
+          <p id="metric-frag-desc" class="text-[10px] text-amber-700 mt-1 leading-tight">Espacio desperdiciado dentro de marcos asignados.</p>
+        </div>
+
+        <!-- FREE MEMORY -->
+        <div class="flex justify-between items-center text-xs text-slate-500 pt-1">
+          <span>Espacio Libres Totales:</span>
+          <span id="metric-free" class="font-bold text-slate-700">1024 KB</span>
+        </div>
+      </div>
+
+      <!-- EVENT LOG CARD -->
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex justify-between items-center">
+          <span>Historial de Eventos</span>
+          <i class="fa-solid fa-list-ul text-slate-400"></i>
+        </h3>
+        <div id="event-log" class="h-40 overflow-y-auto space-y-2 text-xs font-mono pr-1">
+          <div class="text-slate-400 italic">Esperando acciones...</div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- MAIN DISPLAY: VISUAL RAM & ACADEMIC INFO (8 Cols) -->
+    <section class="lg:col-span-8 space-y-6 flex flex-col">
+
+      <!-- EDUCATIONAL BANNER & ALERT CONTAINER -->
+      <div id="alert-box" class="hidden p-4 rounded-2xl border transition-all duration-300"></div>
+
+      <!-- RAM VISUALIZATION CONTAINER -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex-grow flex flex-col justify-between">
+        
+        <div>
+          <!-- VISUAL HEADER & LEYEND -->
+          <div class="flex flex-wrap justify-between items-center gap-3 mb-6">
+            <div>
+              <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-memory text-indigo-600"></i> Map de Memoria RAM
+              </h2>
+              <p class="text-xs text-slate-500">Visualización física del espacio contiguo (0 KB - 1024 KB)</p>
+            </div>
+
+            <!-- LEYEND -->
+            <div class="flex flex-wrap items-center gap-3 text-xs">
+              <div class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-sm bg-indigo-500 border border-indigo-600"></span>
+                <span class="text-slate-600 font-medium">Uso Real</span>
+              </div>
+              <div id="legend-frag-internal" class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-sm bg-red-400 border border-red-500 bg-stripes-warning"></span>
+                <span class="text-slate-600 font-medium">Frag. Interna</span>
+              </div>
+              <div id="legend-free" class="flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-sm bg-slate-200 border border-slate-300"></span>
+                <span class="text-slate-600 font-medium">Libre</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC MEMORY BAR -->
+          <div id="ram-container" class="w-full min-h-[140px] bg-slate-100 rounded-xl p-2 border-2 border-dashed border-slate-300 flex flex-wrap gap-2 items-stretch justify-start transition-all">
+            <!-- Dynamic Content Generated by JS -->
+          </div>
+        </div>
+
+        <!-- PROCESS MANAGEMENT LIST / DELETION TABLE -->
+        <div class="mt-8 border-t border-slate-100 pt-5">
+          <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Procesos en Memoria</h3>
+          <div id="process-table" class="flex flex-wrap gap-2">
+            <!-- Dynamic Buttons/Badges to remove processes -->
+            <span class="text-xs text-slate-400 italic">Sin procesos cargados actualmente.</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- EDUCATIONAL EXPLANATION CARD -->
+      <div id="explanation-card" class="bg-indigo-950 text-indigo-100 p-6 rounded-2xl shadow-sm border border-indigo-900 space-y-3">
+        <!-- Content inserted dynamically -->
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-slate-200 mt-auto py-4 text-center text-xs text-slate-500">
+    <div class="max-w-7xl mx-auto px-4">
+      Simulador Educativo de Administración de Memoria &copy; 2026 - Generado para aprendizaje de Sistemas Operativos
+    </div>
+  </footer>
+
+  <!-- SIMULATOR JAVASCRIPT LOGIC -->
+  <script>
+    // GLOBAL STATE
+    const TOTAL_RAM = 1024; // KB
+    let currentMode = 'internal'; // 'internal' | 'external'
+    
+    // Internal Mode State (Fixed Partitions)
+    let frameSize = 128;
+    let internalBlocks = []; // Array of { id, processId, sizeUsed, totalSize }
+
+    // External Mode State (Dynamic Partitions)
+    let externalSegments = []; // Array of { type: 'process'|'free', id, processId, size, startAddr }
+    let processCounter = 1;
+
+    // INIT ON LOAD
+    window.onload = function() {
+      resetSimulator();
+    };
+
+    // MODE SWITCHING
+    function switchMode(mode) {
+      currentMode = mode;
+      
+      const tabInternal = document.getElementById('tab-internal');
+      const tabExternal = document.getElementById('tab-external');
+      const controlsInternal = document.getElementById('controls-internal');
+      const controlsExternal = document.getElementById('controls-external');
+      const legendFragInternal = document.getElementById('legend-frag-internal');
+      
+      if (mode === 'internal') {
+        tabInternal.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 bg-white text-indigo-700 shadow-sm";
+        tabExternal.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 text-indigo-200 hover:text-white";
+        controlsInternal.classList.remove('hidden');
+        controlsExternal.classList.add('hidden');
+        legendFragInternal.classList.remove('hidden');
+        document.getElementById('panel-title').innerText = "Paginación (Marcos Fijos)";
+      } else {
+        tabExternal.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 bg-white text-indigo-700 shadow-sm";
+        tabInternal.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 text-indigo-200 hover:text-white";
+        controlsExternal.classList.remove('hidden');
+        controlsInternal.classList.add('hidden');
+        legendFragInternal.classList.add('hidden');
+        document.getElementById('panel-title').innerText = "Segmentación / Dinámica";
+      }
+
+      resetSimulator();
+    }
+
+    // RESET FUNCTION
+    function resetSimulator() {
+      processCounter = 1;
+      clearAlert();
+      document.getElementById('event-log').innerHTML = '<div class="text-slate-400 italic">Simulador reiniciado.</div>';
+
+      if (currentMode === 'internal') {
+        frameSize = parseInt(document.getElementById('frame-size-select').value);
+        const totalFrames = Math.floor(TOTAL_RAM / frameSize);
+        internalBlocks = [];
+        for (let i = 0; i < totalFrames; i++) {
+          internalBlocks.push({
+            id: i,
+            processId: null,
+            sizeUsed: 0,
+            totalSize: frameSize
+          });
+        }
+      } else {
+        externalSegments = [{
+          type: 'free',
+          id: 'free-initial',
+          processId: null,
+          size: TOTAL_RAM,
+          startAddr: 0
+        }];
+      }
+
+      render();
+      logEvent(`Sistema inicializado en modo ${currentMode === 'internal' ? 'Paginación (Particiones Fijas)' : 'Segmentación (Variables)'}.`);
+    }
+
+    function resetInternalMode() {
+      if (currentMode === 'internal') resetSimulator();
+    }
+
+    // -------------------------------------------------------------
+    // INTERNAL FRAGMENTATION LOGIC
+    // -------------------------------------------------------------
+    function addProcessInternal() {
+      const input = document.getElementById('proc-size-internal');
+      const size = parseInt(input.value);
+
+      if (isNaN(size) || size <= 0) {
+        showAlert('warning', 'Atención', 'Ingrese un tamaño de proceso válido en KB.');
+        return;
+      }
+
+      if (size > frameSize) {
+        showAlert('danger', 'Error de Asignación', `En esta simplificación, un proceso debe ser menor o igual al tamaño del marco (${frameSize} KB).`);
+        return;
+      }
+
+      // Find first empty frame
+      const freeFrame = internalBlocks.find(b => b.processId === null);
+
+      if (!freeFrame) {
+        showAlert('danger', 'Memoria Llena', 'No hay marcos de página libres disponibles.');
+        logEvent(`Error: No hay marcos libres para P${processCounter} (${size} KB).`);
+        return;
+      }
+
+      freeFrame.processId = `P${processCounter++}`;
+      freeFrame.sizeUsed = size;
+      input.value = '';
+
+      clearAlert();
+      const wasted = freeFrame.totalSize - size;
+      logEvent(`Proceso ${freeFrame.processId} (${size} KB) asignado al Marco #${freeFrame.id}. Desperdicio interno: ${wasted} KB.`);
+      
+      render();
+    }
+
+    function removeProcessInternal(blockId) {
+      const block = internalBlocks.find(b => b.id === blockId);
+      if (block && block.processId) {
+        const pId = block.processId;
+        block.processId = null;
+        block.sizeUsed = 0;
+        logEvent(`Proceso ${pId} liberó el Marco #${blockId}.`);
+        clearAlert();
+        render();
+      }
+    }
+
+    // -------------------------------------------------------------
+    // EXTERNAL FRAGMENTATION LOGIC
+    // -------------------------------------------------------------
+    function addProcessExternal() {
+      const input = document.getElementById('proc-size-external');
+      const size = parseInt(input.value);
+
+      if (isNaN(size) || size <= 0) {
+        showAlert('warning', 'Atención', 'Ingrese un tamaño de proceso válido en KB.');
+        return;
+      }
+
+      if (size > TOTAL_RAM) {
+        showAlert('danger', 'Error', 'El proceso supera la capacidad total de la memoria RAM.');
+        return;
+      }
+
+      // First-fit Search
+      let assignedIndex = -1;
+      for (let i = 0; i < externalSegments.length; i++) {
+        if (externalSegments[i].type === 'free' && externalSegments[i].size >= size) {
+          assignedIndex = i;
+          break;
+        }
+      }
+
+      if (assignedIndex !== -1) {
+        // Fits into a contiguous block!
+        const target = externalSegments[assignedIndex];
+        const remaining = target.size - size;
+        const pName = `P${processCounter++}`;
+
+        // Replace free block with process block
+        const newProc = {
+          type: 'process',
+          id: `proc-${Date.now()}`,
+          processId: pName,
+          size: size,
+          startAddr: target.startAddr
+        };
+
+        if (remaining > 0) {
+          const newFree = {
+            type: 'free',
+            id: `free-${Date.now()}`,
+            processId: null,
+            size: remaining,
+            startAddr: target.startAddr + size
+          };
+          externalSegments.splice(assignedIndex, 1, newProc, newFree);
+        } else {
+          externalSegments.splice(assignedIndex, 1, newProc);
+        }
+
+        input.value = '';
+        clearAlert();
+        logEvent(`Proceso ${pName} (${size} KB) asignado de forma contigua.`);
+      } else {
+        // Couldn't find contiguous block. Check total free RAM!
+        const totalFree = externalSegments
+          .filter(s => s.type === 'free')
+          .reduce((acc, s) => acc + s.size, 0);
+
+        if (totalFree >= size) {
+          // EXTERNAL FRAGMENTATION DETECTED!
+          showAlert(
+            'warning', 
+            '¡FRAGMENTACIÓN EXTERNA DETECTADA!', 
+            `Existe un total de <strong>${totalFree} KB libres</strong>, suficiente para el proceso P${processCounter} (${size} KB). Sin embargo, el espacio está dividido en varios huecos pequeños discontinuos. Se requiere <strong>Compactación</strong>.`
+          );
+          logEvent(`ALERTA: Fragmentación Externa. Se necesitan ${size} KB contiguos, hay ${totalFree} KB libres dispersos.`);
+        } else {
+          showAlert('danger', 'Memoria Insuficiente', `No hay suficiente memoria RAM libre (Solicitado: ${size} KB, Disponible total: ${totalFree} KB).`);
+          logEvent(`Error: Memoria insuficiente para asignación de ${size} KB.`);
+        }
+      }
+
+      render();
+    }
+
+    function removeProcessExternal(id) {
+      const idx = externalSegments.findIndex(s => s.id === id);
+      if (idx !== -1) {
+        const pId = externalSegments[idx].processId;
+        const pSize = externalSegments[idx].size;
+        
+        // Change to free block
+        externalSegments[idx].type = 'free';
+        externalSegments[idx].processId = null;
+
+        // Merge adjacent free blocks
+        mergeFreeSegments();
+
+        logEvent(`Proceso ${pId} (${pSize} KB) finalizado. Se ha creado un hueco de espacio libre.`);
+        clearAlert();
+        render();
+      }
+    }
+
+    function mergeFreeSegments() {
+      for (let i = 0; i < externalSegments.length - 1; i++) {
+        if (externalSegments[i].type === 'free' && externalSegments[i+1].type === 'free') {
+          externalSegments[i].size += externalSegments[i+1].size;
+          externalSegments.splice(i+1, 1);
+          i--; // re-check position
+        }
+      }
+    }
+
+    function compactMemory() {
+      if (currentMode !== 'external') return;
+
+      const processes = externalSegments.filter(s => s.type === 'process');
+      const totalFreeSize = externalSegments.filter(s => s.type === 'free').reduce((acc, s) => acc + s.size, 0);
+
+      if (totalFreeSize === 0) {
+        showAlert('info', 'Compactación no requerida', 'No hay huecos libres para compactar.');
+        return;
+      }
+
+      let currentAddr = 0;
+      const newSegments = [];
+
+      // Shift all processes to the beginning
+      processes.forEach(p => {
+        p.startAddr = currentAddr;
+        currentAddr += p.size;
+        newSegments.push(p);
+      });
+
+      // Put consolidated free block at the end
+      if (totalFreeSize > 0) {
+        newSegments.push({
+          type: 'free',
+          id: `free-compacted-${Date.now()}`,
+          processId: null,
+          size: totalFreeSize,
+          startAddr: currentAddr
+        });
+      }
+
+      externalSegments = newSegments;
+      showAlert('success', 'Compactación Exitosa', 'Todos los procesos han sido reubicados al inicio. Los huecos se han unido en un solo bloque contiguo.');
+      logEvent(`Compactación ejecutada: Se consolidaron ${totalFreeSize} KB de espacio libre discontinuo.`);
+      render();
+    }
+
+
+    // -------------------------------------------------------------
+    // RENDERING & UI UPDATES
+    // -------------------------------------------------------------
+    function render() {
+      renderRAM();
+      renderMetrics();
+      renderProcessTable();
+      renderExplanation();
+    }
+
+    function renderRAM() {
+      const container = document.getElementById('ram-container');
+      container.innerHTML = '';
+
+      if (currentMode === 'internal') {
+        container.className = "w-full min-h-[140px] bg-slate-100 rounded-xl p-3 border border-slate-300 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-2.5 transition-all";
+
+        internalBlocks.forEach(block => {
+          const isOccupied = block.processId !== null;
+          const usedPct = isOccupied ? (block.sizeUsed / block.totalSize) * 100 : 0;
+          const wastedPct = isOccupied ? 100 - usedPct : 0;
+          const wastedKb = block.totalSize - block.sizeUsed;
+
+          const blockDiv = document.createElement('div');
+          blockDiv.className = `ram-block relative flex flex-col justify-between p-2 rounded-lg border text-xs font-mono h-28 overflow-hidden transition-all shadow-sm ${
+            isOccupied ? 'bg-white border-indigo-300' : 'bg-slate-200/60 border-slate-300 border-dashed opacity-75'
+          }`;
+
+          if (isOccupied) {
+            blockDiv.innerHTML = `
+              <div class="flex justify-between items-center text-[10px] font-bold text-slate-500 z-10">
+                <span>M#${block.id}</span>
+                <span class="text-indigo-700 bg-indigo-50 px-1 rounded">${block.processId}</span>
+              </div>
+              <div class="my-1 flex-grow flex flex-col justify-end relative rounded bg-slate-100 overflow-hidden border border-slate-200">
+                <div class="bg-indigo-500 text-[9px] text-white flex items-center justify-center font-bold" style="height: ${usedPct}%" title="Útil: ${block.sizeUsed} KB">
+                  ${usedPct > 20 ? block.sizeUsed + 'KB' : ''}
+                </div>
+                ${wastedPct > 0 ? `
+                  <div class="bg-red-400 bg-stripes-warning text-[9px] text-red-900 flex items-center justify-center font-bold" style="height: ${wastedPct}%" title="Desperdicio: ${wastedKb} KB">
+                    ${wastedPct > 20 ? wastedKb + 'KB' : ''}
+                  </div>
+                ` : ''}
+              </div>
+              <div class="text-[9px] text-center text-slate-400 font-sans">
+                Cap: ${block.totalSize}KB
+              </div>
+            `;
+          } else {
+            blockDiv.innerHTML = `
+              <div class="text-[10px] text-slate-400 font-bold">M#${block.id}</div>
+              <div class="flex flex-col items-center justify-center flex-grow text-slate-400">
+                <i class="fa-regular fa-square text-lg mb-1"></i>
+                <span class="text-[10px]">Libre</span>
+              </div>
+              <div class="text-[9px] text-center text-slate-400">${block.totalSize}KB</div>
+            `;
+          }
+
+          container.appendChild(blockDiv);
+        });
+
+      } else {
+        // EXTERNAL MODE
+        container.className = "w-full min-h-[140px] bg-slate-100 rounded-xl p-3 border border-slate-300 flex flex-nowrap gap-1 overflow-x-auto transition-all items-center";
+
+        externalSegments.forEach(seg => {
+          const widthPct = (seg.size / TOTAL_RAM) * 100;
+          const segDiv = document.createElement('div');
+          
+          segDiv.style.width = `${Math.max(widthPct, 6)}%`;
+          segDiv.style.minWidth = "60px";
+
+          if (seg.type === 'process') {
+            segDiv.className = "ram-block h-28 bg-indigo-600 border border-indigo-700 text-white rounded-lg p-2 flex flex-col justify-between shrink-0 shadow-sm relative group";
+            segDiv.innerHTML = `
+              <div class="flex justify-between items-center text-[10px]">
+                <span class="font-bold bg-indigo-800/60 px-1 rounded">${seg.processId}</span>
+                <span class="text-[9px] opacity-80">${seg.size}KB</span>
+              </div>
+              <div class="text-center font-bold text-xs py-1">${seg.processId}</div>
+              <div class="text-[9px] opacity-75 font-mono">0x${seg.startAddr.toString(16).toUpperCase()}</div>
+            `;
+          } else {
+            segDiv.className = "ram-block h-28 bg-slate-200 border-2 border-dashed border-slate-300 text-slate-500 rounded-lg p-2 flex flex-col justify-between shrink-0 relative";
+            segDiv.innerHTML = `
+              <div class="text-[10px] font-bold">Hueco</div>
+              <div class="text-center font-bold text-xs text-slate-400">${seg.size} KB</div>
+              <div class="text-[9px] text-slate-400 font-mono">Libre</div>
+            `;
+          }
+
+          container.appendChild(segDiv);
+        });
+      }
+    }
+
+    function renderMetrics() {
+      document.getElementById('metric-total').innerText = `${TOTAL_RAM} KB`;
+
+      if (currentMode === 'internal') {
+        const totalUsedReal = internalBlocks.reduce((acc, b) => acc + b.sizeUsed, 0);
+        const totalAllocated = internalBlocks.filter(b => b.processId !== null).length * frameSize;
+        const totalFragInternal = totalAllocated - totalUsedReal;
+        const totalFree = TOTAL_RAM - totalAllocated;
+
+        const fragPct = totalAllocated > 0 ? ((totalFragInternal / totalAllocated) * 100).toFixed(1) : 0;
+
+        document.getElementById('metric-used').innerText = `${totalUsedReal} KB`;
+        document.getElementById('metric-frag-title').innerText = "Frag. Interna Total";
+        document.getElementById('metric-frag-value').innerText = `${totalFragInternal} KB`;
+        document.getElementById('metric-frag-percent').innerText = `${fragPct}% del asignado`;
+        document.getElementById('metric-frag-desc').innerText = "Espacio desperdiciado DENTRO de los marcos ocupados.";
+        document.getElementById('metric-free').innerText = `${totalFree} KB (en ${internalBlocks.filter(b => b.processId === null).length} marcos)`;
+
+      } else {
+        const totalUsed = externalSegments.filter(s => s.type === 'process').reduce((acc, s) => acc + s.size, 0);
+        const freeSegments = externalSegments.filter(s => s.type === 'free');
+        const totalFree = freeSegments.reduce((acc, s) => acc + s.size, 0);
+        
+        // Calculate potential external fragmentation
+        const largestFreeBlock = freeSegments.length > 0 ? Math.max(...freeSegments.map(s => s.size)) : 0;
+        const externalFragKb = totalFree - largestFreeBlock;
+
+        document.getElementById('metric-used').innerText = `${totalUsed} KB`;
+        document.getElementById('metric-frag-title').innerText = "Frag. Externa Potencial";
+        document.getElementById('metric-frag-value').innerText = `${externalFragKb} KB`;
+        document.getElementById('metric-frag-percent').innerText = `${freeSegments.length} Huecos`;
+        document.getElementById('metric-frag-desc').innerText = "Espacio libre no contiguo que no puede aprovecharse fácilmente.";
+        document.getElementById('metric-free').innerText = `${totalFree} KB`;
+      }
+    }
+
+    function renderProcessTable() {
+      const table = document.getElementById('process-table');
+      table.innerHTML = '';
+
+      if (currentMode === 'internal') {
+        const active = internalBlocks.filter(b => b.processId !== null);
+
+        if (active.length === 0) {
+          table.innerHTML = '<span class="text-xs text-slate-400 italic">No hay procesos activos en los marcos.</span>';
+          return;
+        }
+
+        active.forEach(b => {
+          const badge = document.createElement('div');
+          badge.className = "inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs px-3 py-1.5 rounded-lg";
+          badge.innerHTML = `
+            <span class="font-bold">${b.processId}</span>
+            <span class="text-[11px] text-indigo-600">(${b.sizeUsed} KB en M#${b.id})</span>
+            <button onclick="removeProcessInternal(${b.id})" class="text-slate-400 hover:text-red-500 transition ml-1" title="Finalizar Proceso">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          `;
+          table.appendChild(badge);
+        });
+
+      } else {
+        const active = externalSegments.filter(s => s.type === 'process');
+
+        if (active.length === 0) {
+          table.innerHTML = '<span class="text-xs text-slate-400 italic">No hay procesos cargados.</span>';
+          return;
+        }
+
+        active.forEach(s => {
+          const badge = document.createElement('div');
+          badge.className = "inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs px-3 py-1.5 rounded-lg";
+          badge.innerHTML = `
+            <span class="font-bold">${s.processId}</span>
+            <span class="text-[11px] text-indigo-600">(${s.size} KB)</span>
+            <button onclick="removeProcessExternal('${s.id}')" class="text-slate-400 hover:text-red-500 transition ml-1" title="Finalizar Proceso">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          `;
+          table.appendChild(badge);
+        });
+      }
+    }
+
+    function renderExplanation() {
+      const card = document.getElementById('explanation-card');
+
+      if (currentMode === 'internal') {
+        card.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="p-2 bg-indigo-900/80 rounded-lg text-amber-400 text-xl shrink-0">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="space-y-1">
+              <h4 class="font-bold text-white text-sm">¿Qué es la Fragmentación Interna?</h4>
+              <p class="text-xs text-indigo-200 leading-relaxed">
+                Ocurre en sistemas de asignación por <strong>Particiones Fijas o Paginación</strong>. La memoria se divide en bloques fijos (ej. ${frameSize} KB). Si un proceso requiere menos memoria de la que tiene el marco asignado (ej. requiere 90 KB en un marco de 128 KB), el espacio restante dentro de ese marco se desperdicia y ningún otro proceso puede utilizarlo.
+              </p>
+            </div>
+          </div>
+        `;
+      } else {
+        card.innerHTML = `
+          <div class="flex items-start gap-3">
+            <div class="p-2 bg-indigo-900/80 rounded-lg text-emerald-400 text-xl shrink-0">
+              <i class="fa-solid fa-graduation-cap"></i>
+            </div>
+            <div class="space-y-1">
+              <h4 class="font-bold text-white text-sm">¿Qué es la Fragmentación Externa y la Compactación?</h4>
+              <p class="text-xs text-indigo-200 leading-relaxed">
+                Ocurre en sistemas de <strong>Particiones Dinámicas / Segmentación</strong>. Con el paso del tiempo, al cargar y finalizar procesos, la memoria libre queda dividida en pequeños <i>huecos discontinuos</i>. Aunque la suma de todos los huecos libres sea suficiente para un nuevo proceso, no se puede cargar porque no existe un bloque <strong>contiguo</strong>. La solución es ejecutar la <strong>Compactación</strong> para consolidar todos los espacios libres en uno solo.
+              </p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // HELPER FUNCTIONS
+    function logEvent(msg) {
+      const log = document.getElementById('event-log');
+      if (log.children.length === 1 && log.children[0].classList.contains('italic')) {
+        log.innerHTML = '';
+      }
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      const entry = document.createElement('div');
+      entry.className = "text-[11px] text-slate-700 leading-snug border-b border-slate-100 pb-1";
+      entry.innerHTML = `<span class="text-slate-400 font-sans">[${time}]</span> ${msg}`;
+      log.prepend(entry);
+    }
+
+    function showAlert(type, title, message) {
+      const box = document.getElementById('alert-box');
+      box.classList.remove('hidden', 'bg-amber-50', 'border-amber-300', 'text-amber-900', 'bg-red-50', 'border-red-300', 'text-red-900', 'bg-emerald-50', 'border-emerald-300', 'text-emerald-900', 'bg-blue-50', 'border-blue-300', 'text-blue-900');
+
+      let styles = '';
+      let icon = '';
+
+      if (type === 'warning') {
+        styles = 'bg-amber-50 border-amber-300 text-amber-900';
+        icon = 'fa-triangle-exclamation text-amber-600';
+      } else if (type === 'danger') {
+        styles = 'bg-red-50 border-red-300 text-red-900';
+        icon = 'fa-circle-xmark text-red-600';
+      } else if (type === 'success') {
+        styles = 'bg-emerald-50 border-emerald-300 text-emerald-900';
+        icon = 'fa-circle-check text-emerald-600';
+      } else {
+        styles = 'bg-blue-50 border-blue-300 text-blue-900';
+        icon = 'fa-circle-info text-blue-600';
+      }
+
+      box.className = `p-4 rounded-2xl border ${styles} flex items-start gap-3 shadow-sm transition-all duration-300`;
+      box.innerHTML = `
+        <i class="fa-solid ${icon} text-xl mt-0.5 shrink-0"></i>
+        <div class="text-xs space-y-0.5">
+          <strong class="font-bold text-sm block">${title}</strong>
+          <div>${message}</div>
+        </div>
+      `;
+    }
+
+    function clearAlert() {
+      const box = document.getElementById('alert-box');
+      box.classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
